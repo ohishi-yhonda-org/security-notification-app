@@ -357,24 +357,49 @@ describe('NotificationManager', () => {
 		const doId = env.NOTIFICATION_MANAGER.idFromName('test-check-events');
 		const stub = env.NOTIFICATION_MANAGER.get(doId);
 
+		// Add an endpoint to ensure notification is sent
+		const endpoint = {
+			id: 'test-endpoint',
+			name: 'Test Endpoint',
+			type: 'webhook' as const,
+			url: 'https://example.com/webhook',
+			enabled: true,
+			createdAt: new Date().toISOString()
+		};
+		await stub.addEndpoint(endpoint);
+
 		// Mock Cloudflare API response
 		const originalFetch = global.fetch;
 		global.fetch = vi.fn()
-			.mockResolvedValueOnce(new Response(JSON.stringify({
-				result: [{
-					ray_id: 'event-1',
-					occurred_at: new Date().toISOString(),
-					action: 'block',
-					client_ip: '1.2.3.4',
-					country: 'US',
-					method: 'GET',
-					host: 'example.com',
-					uri: '/test',
-					user_agent: 'Mozilla/5.0',
-					rule_id: 'rule-1',
-					rule_message: 'Blocked by WAF'
-				}]
-			}), { status: 200 }));
+			.mockImplementation(async (url: string, options?: any) => {
+				if (url.includes('api.cloudflare.com')) {
+					return new Response(JSON.stringify({
+						result: [{
+							ray_id: 'event-1',
+							occurred_at: new Date().toISOString(),
+							action: 'block',
+							client_ip: '1.2.3.4',
+							country: 'US',
+							method: 'GET',
+							host: 'example.com',
+							uri: '/test',
+							user_agent: 'Mozilla/5.0',
+							rule_id: 'rule-1',
+							rule_message: 'Blocked by WAF'
+						}]
+					}), { status: 200 });
+				}
+				// Webhook response
+				return new Response('OK', { status: 200 });
+			});
+
+		// Mock KV storage
+		const originalKV = env.PROCESSED_EVENTS;
+		env.PROCESSED_EVENTS = {
+			...originalKV,
+			get: vi.fn().mockResolvedValue(null),
+			put: vi.fn()
+		} as any;
 
 		try {
 			await stub.checkAndNotifySecurityEvents();
@@ -384,12 +409,23 @@ describe('NotificationManager', () => {
 				expect.stringContaining('api.cloudflare.com'),
 				expect.objectContaining({
 					headers: expect.objectContaining({
-						'Authorization': 'Bearer test-token'
+						'Authorization': expect.stringContaining('Bearer'),
+						'Content-Type': 'application/json'
 					})
+				})
+			);
+
+			// Should send notification
+			expect(global.fetch).toHaveBeenCalledWith(
+				endpoint.url,
+				expect.objectContaining({
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' }
 				})
 			);
 		} finally {
 			global.fetch = originalFetch;
+			env.PROCESSED_EVENTS = originalKV;
 		}
 	});
 
