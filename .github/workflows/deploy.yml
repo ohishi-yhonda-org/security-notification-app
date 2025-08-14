@@ -13,7 +13,7 @@ jobs:
     
     steps:
       - name: Deploy Drive API
-        uses: ohishi-yhonda-org/drive-api-deploy-action@main
+        uses: ohishi-yhonda-pub/drive-api-deploy-action@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           public-repo-token: ${{ secrets.PUBLIC_REPO_TOKEN }}
