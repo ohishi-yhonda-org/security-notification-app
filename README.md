@@ -93,3 +93,5 @@ APIトークンには以下の権限が必要です:
 - Zone > Security Events > Read
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ohishi-yhonda-pub/security-notification-app)
+
+test
